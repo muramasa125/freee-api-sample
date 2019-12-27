@@ -126,7 +126,8 @@
         },
       }).then((data) => {
         console.log(data);
-        $('#content').after('<h2>こんにちは、' + data.user.display_name + 'さん！</h2>');
+        $('#content').after('<h2>ユーザー名：' + data.user.display_name + '</h2>');
+        $('#content').after('<h2>メールアドレス：' + data.user.email + '</h2>');
       });
     }
 
