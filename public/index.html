@@ -19,7 +19,7 @@
 <body>
   <div id="app">
     <b-navbar toggleable="lg" type="dark" variant="info">
-      <b-navbar-brand href="#">freee API サンプル</b-navbar-brand>
+      <b-navbar-brand href="#">freee API 認証サンプル</b-navbar-brand>
       <!--<b-navbar-nav>
         <b-nav-item-dropdown :text="user.display_name" right>
           <b-dropdown-item href="#">Account</b-dropdown-item>
@@ -28,25 +28,45 @@
       </b-navbar-nav>-->
     </b-navbar>
     <b-container>
-      <h5 v-if="user.id != null">{{ user.email }}:{{ user.display_name }}</h5>
-      <b-button variant="warning" v-if="auth.access_token != null" v-on:click="revokeToken()">token破棄</b-button>
+      <b-row>
+        <h5 v-if="user.id != null">{{ user.email }}:{{ user.display_name }}</h5>
+        <b-button variant="warning" v-if="auth.access_token != null" v-on:click="revokeToken()">token破棄</b-button>
+      </b-row>
       <b-container>
-        <p v-if="companies.length > 0">事業所を選択してください</p>
-        <b-form-group v-for="company in companies">
-          <b-form-radio v-model="company_selected" name="some-radios" :value="company.id">{{ company.display_name }}</b-form-radio>
-        </b-form-group>
-        <b-button variant="primary" v-if="companies.length > 0" v-on:click="getCompany()">確定</b-button>
-        <b-container v-if="myCompany != null">
-          <p>事業所情報</p>
-          <p>{{ myCompany.display_name }}</p>
-          <p>{{ myCompany.zipcode }}</p>
-          <p>{{ myCompany.street_name1 }}</p>
-          <p>{{ myCompany.street_name2 }}</p>
-          <p>{{ myCompany.phone1 }}</p>
-          <p>会計期間</p>
-          <b-table striped hover :items="myCompany.fiscal_years"></b-table>
+        <b-card v-if="companies.length > 0 || my_company != null">
+          <p v-if="companies.length > 0">事業所を選択してください</p>
+          <b-form-group v-for="company in companies">
+            <b-form-radio v-model="company_selected" name="some-radios" :value="company.id">{{ company.display_name }}</b-form-radio>
+          </b-form-group>
+          <b-button variant="primary" v-if="companies.length > 0" v-on:click="getCompany()">この事業所の会計データで申し込む</b-button>
+          <b-container v-if="my_company != null">
+            <p>事業所情報</p>
+            <p>{{ my_company.display_name }}</p>
+            <p>{{ my_company.zipcode }} {{ my_company.street_name1 }} {{ my_company.street_name2 }}</p>
+            <p>{{ my_company.phone1 }}</p>
+            <b-table striped hover :items="my_company.fiscal_years" :fields="fields_fiscal_years" caption-top>
+              <template v-slot:table-caption>会計期間</template>
+            </b-table>
+            <b-button variant="primary" v-on:click="getAccountItems()">勘定科目一覧取得</b-button>
+            <b-button variant="primary" v-on:click="getReportBS()">BS取得</b-button>
+            <b-button variant="primary" v-on:click="getReportPL()">PL取得</b-button>
+          </b-card>
+        <b-tabs content-class="mt-3" v-if="account_items != null || report.BS != null || report.PL != null">
+          <b-tab title="勘定科目" v-if="account_items != null" active>
+            <b-table small striped hover :items="account_items"></b-table>
+          </b-tab>
+          <b-tab title="BS" v-if="report.BS != null">
+            <b-table small striped hover :items="report.BS.balances" caption-top>
+              <template v-slot:table-caption>{{ report.BS.fiscal_year }}年度</template>
+            </b-table>
+          </b-tab>
+          <b-tab title="PL" v-if="report.PL != null">
+            <b-table small striped hover :items="report.PL.balances" caption-top>
+              <template v-slot:table-caption>{{ report.PL.fiscal_year }}年度</template>
+            </b-table>
+          </b-tab>
+        </b-tabs>
         </b-container>
-      </b-container>
       <b-button variant="primary" v-if="auth.access_token === null" v-on:click="getAuthCode()">freee認証</b-button>
     </b-container>
   </div>
@@ -69,7 +89,18 @@
         },
         companies: [],
         company_selected: null,
-        myCompany: null
+        my_company: null,
+        fields_fiscal_years: [
+          { key:'start_date', label: '開始日' },
+          { key:'end_date', label: '終了日' },
+          { key:'tax_method', label: '課税区分' },
+          { key:'sales_tax_business_code', label: '簡易課税用事業区分' }
+        ],
+        account_items: null,
+        report: {
+          BS: null,
+          PL: null
+        }
       },
       mounted: function () {
         console.log('mounted');
@@ -160,7 +191,7 @@
             self.user.email = response.data.user.email;
             self.user.display_name = response.data.user.display_name;
           })
-          .catch(function () {
+          .catch(function (error) {
             console.log(error);
           })
         },
@@ -174,7 +205,7 @@
             console.log(response);
             self.companies = response.data.companies;
           })
-          .catch(function () {
+          .catch(function (error) {
             console.log(error);
           })
         },
@@ -186,11 +217,59 @@
             data: {}
           })
           .then(function (response) {
-            self.myCompany = response.data.company;
+            self.my_company = response.data.company;
             console.log(response);
             self.companies = [];
           })
-          .catch(function () {
+          .catch(function (error) {
+            console.log(error);
+          })
+        },
+        getAccountItems: function () {
+          let self = this
+          this.account_items = null
+          axios.get('/account_items', {
+            params: { company_id: this.my_company.id },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.account_items = response.data.account_items;
+            console.log(response);
+          })
+          .catch(function (error) {
+            console.log(error);
+          })
+        },
+        getReportBS: function () {
+          let self = this
+          this.report.BS = null
+          axios.get('/reports/trial_bs', {
+            params: { company_id: this.my_company.id },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.report.BS = response.data.trial_bs;
+            console.log(response);
+          })
+          .catch(function (error) {
+            console.log(error);
+          })
+        },
+        getReportPL: function () {
+          let self = this
+          this.report.PL = null
+          axios.get('/reports/trial_pl', {
+            params: { company_id: this.my_company.id },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.report.PL = response.data.trial_pl;
+            console.log(response);
+          })
+          .catch(function (error) {
             console.log(error);
           })
         },

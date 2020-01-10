@@ -102,4 +102,60 @@ app.get('/company/', (req, res) => {
     res.send(body);
   });
 });
+app.get('/account_items/', (req, res) => {
+  const options = {
+    method: 'GET',
+    url: "https://api.freee.co.jp/api/1/account_items/",
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + req.header('token'),
+    },
+    qs: req.query,
+    json: true
+  };
+  request(options, function(error, response, body) {
+    console.log(body);
+    res.send(body);
+  });
+});
+app.get('/reports/trial_bs/', (req, res) => {
+  const options = {
+    method: 'GET',
+    url: "https://api.freee.co.jp/api/1/reports/trial_bs/",
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + req.header('token'),
+    },
+    qs: {
+      company_id: req.query.company_id,
+      account_item_display_type: 'group',
+      breakdown_display_type: 'account_item'
+    },
+    json: true
+  };
+  request(options, function(error, response, body) {
+    console.log(body);
+    res.send(body);
+  });
+});
+app.get('/reports/trial_pl/', (req, res) => {
+  const options = {
+    method: 'GET',
+    url: "https://api.freee.co.jp/api/1/reports/trial_pl/",
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + req.header('token'),
+    },
+    qs: {
+      company_id: req.query.company_id,
+      account_item_display_type: 'group',
+      breakdown_display_type: 'account_item'
+    },
+    json: true
+  };
+  request(options, function(error, response, body) {
+    console.log(body);
+    res.send(body);
+  });
+});
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))
