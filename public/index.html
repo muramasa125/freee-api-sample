@@ -5,158 +5,206 @@
   <meta content="IE=edge" http-equiv="X-UA-Compatible">
   <meta content="width=device-width, initial-scale=1" name="viewport">
   <title>freee APIの認証サンプル</title>
-  <script src="https://code.jquery.com/jquery-3.4.1.js" integrity="sha256-WpOohJOqMqqyKL9FccASB9O0KwACQJpFTUBLTYOVvVU=" crossorigin="anonymous"></script>
-  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Load required Bootstrap and BootstrapVue CSS -->
+  <link type="text/css" rel="stylesheet" href="https://unpkg.com/bootstrap/dist/css/bootstrap.min.css" />
+  <link type="text/css" rel="stylesheet" href="https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.css" />
+  <!-- Load polyfills to support older browsers -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es2015%2CIntersectionObserver" crossorigin="anonymous"></script>
+  <!-- Load Vue followed by BootstrapVue -->
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+  <script src="https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
+  <!-- axios -->
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <div class="form-group col-sm-8" id="content">
-      <h2>freee API サンプル</h2>
-        <div class="form-group col-xs-2">
-          <input class="form-control" id="client_id" placeholder="Client ID" type="text" >
-        </div>
-        <div class="form-group">
-          <input class="form-control col-xs-2" id="client_secret" placeholder="Client Secret" type="text" >
-        </div>
-        <div class="form-group">
-          <input class="form-control" id="redirect_uri" placeholder="Redirect URL" type="text" >
-        </div>
-        <div class="form-group">
-          <button id="auth">認証</button>
-        </div>
-    </div>
+  <div id="app">
+    <b-navbar toggleable="lg" type="dark" variant="info">
+      <b-navbar-brand href="#">freee API サンプル</b-navbar-brand>
+      <!--<b-navbar-nav>
+        <b-nav-item-dropdown :text="user.display_name" right>
+          <b-dropdown-item href="#">Account</b-dropdown-item>
+          <b-dropdown-item v-if="auth.access_token != null" v-on:click="revokeToken()">Log out</b-dropdown-item>
+        </b-nav-item-dropdown>
+      </b-navbar-nav>-->
+    </b-navbar>
+    <b-container>
+      <h5 v-if="user.id != null">{{ user.email }}:{{ user.display_name }}</h5>
+      <b-button variant="warning" v-if="auth.access_token != null" v-on:click="revokeToken()">token破棄</b-button>
+      <b-container>
+        <p v-if="companies.length > 0">事業所を選択してください</p>
+        <b-form-group v-for="company in companies">
+          <b-form-radio v-model="company_selected" name="some-radios" :value="company.id">{{ company.display_name }}</b-form-radio>
+        </b-form-group>
+        <b-button variant="primary" v-if="companies.length > 0" v-on:click="getCompany()">確定</b-button>
+        <b-container v-if="myCompany != null">
+          <p>事業所情報</p>
+          <p>{{ myCompany.display_name }}</p>
+          <p>{{ myCompany.zipcode }}</p>
+          <p>{{ myCompany.street_name1 }}</p>
+          <p>{{ myCompany.street_name2 }}</p>
+          <p>{{ myCompany.phone1 }}</p>
+          <p>会計期間</p>
+          <b-table striped hover :items="myCompany.fiscal_years"></b-table>
+        </b-container>
+      </b-container>
+      <b-button variant="primary" v-if="auth.access_token === null" v-on:click="getAuthCode()">freee認証</b-button>
+    </b-container>
   </div>
   <script>
-
-  $(function() {
-
-    // 初期情報を入力済みかチェック
-
-    if (sessionStorage.getItem('freee_initial')) {
-      const save_val = JSON.parse(sessionStorage.getItem('freee_initial'));
-      $('#client_id').val(save_val.id);
-      $('#client_secret').val(save_val.secret);
-      $('#redirect_uri').val(save_val.redirect);
-    }
-
-    // 「認証」ボタンを押して認可コード取得=
-
-    $('#auth').on('click', function() {
-      getAuthCode();
-    });
-
-    // 64桁の認可コードが取得されたらfreee APへ認証リクエストを送る
-
-    if (getParam('code')) {
-      if (getParam('code').length == 64) {
-        getToken();
-      }
-    }
-
-    // トークンが取得できていたら「ログインしています」のメッセージを表示
-
-    checkLogin();
-
-    //  「ユーザー名を確認」ボタンをクリックしたらdisplay_nameを表示
-
-    $('#username').on('click', function() {
-      showUsername();
-    });
-
-    //  「ログアウト」ボタンをクリックしたらトークン類を破棄
-
-    $('#logout').on('click', function() {
-      revokeToken();
-    });
-
-    // 関数類をまとめて定義
-
-    function checkLogin() {
-      if (sessionStorage.getItem('freee_token')) {
-        const access_token = JSON.parse(sessionStorage.getItem('freee_token')).access_token
-        const mes = `
-        <p>ログインしています。</p>
-        <button id="username">ユーザー名確認</button><br>
-        <button id="logout">トークン破棄</button>
-      `
-        $("#content").html(mes);
-      }
-    }
-
-    function getAuthCode() {
-      const initial_data = {
-        'id': $('#client_id').val(),
-        'secret': $('#client_secret').val(),
-        'redirect': $('#redirect_uri').val(),
-      };
-      sessionStorage.setItem('freee_initial', JSON.stringify(initial_data));
-      const URL = 'https://accounts.secure.freee.co.jp/public_api/authorize?client_id=' + $('#client_id').val() + '&redirect_uri=' + $('#redirect_uri').val() + '&response_type=code';
-      location.href = URL;
-    }
-
-    function getToken() {
-      const grant_type = 'authorization_code';
-      const code = getParam("code");
-      $.ajax({
-        type: "POST",
-        url: "http://127.0.0.1:3000/auth/",
-        data: {
-          "client_id": $('#client_id').val(),
-          "client_secret": $('#client_secret').val(),
-          "redirect_uri": $('#redirect_uri').val(),
-          "grant_type": "authorization_code",
-          "code": getParam("code"),
-        }
-      }).then((data) => {
-        if (data.access_token) {
-          console.log(data);
-          sessionStorage.setItem('freee_token', JSON.stringify(data));
-          location.href = $('#redirect_uri').val();
-        }
-      });
-    }
-
-    function showUsername() {
-      const save_token = JSON.parse(sessionStorage.getItem('freee_token'));
-      $.ajax({
-        type: 'POST',
-        url: 'http://127.0.0.1:3000/username/',
-        data: {
-          'access_token': save_token.access_token,
+    var app = new Vue({
+      el: '#app',
+      data: {
+        auth: {
+          client_id: null,
+          client_secret: null,
+          redirect_uri: null,
+          code: null,
+          access_token: null,
+          refresh_token: null
         },
-      }).then((data) => {
-        console.log(data);
-        $('#content').after('<h2>ユーザー名：' + data.user.display_name + '</h2>');
-        $('#content').after('<h2>メールアドレス：' + data.user.email + '</h2>');
-      });
-    }
-
-    function revokeToken() {
-      const revoke_refresh_token = JSON.parse(sessionStorage.getItem('freee_token')).refresh_token;
-      $.ajax({
-        type: 'POST',
-        url: 'http://127.0.0.1:3000/revoke/',
-        data: {
-          'token': revoke_refresh_token,
+        user: {
+          id: null,
+          email: null,
+          display_name: null
+        },
+        companies: [],
+        company_selected: null,
+        myCompany: null
+      },
+      mounted: function () {
+        console.log('mounted');
+        this.getAuthInfo();
+        this.checkLogin();
+        this.getLoginUser();
+        this.getCompanies();
+      },
+      methods: {
+        getAuthInfo: function () {
+          let self = this
+          axios.get('/auth')
+          .then(function (response) {
+            console.log(response);
+            self.auth.client_id = response.data.client_id;
+            self.auth.client_secret = response.data.client_secret;
+            self.auth.redirect_uri = response.data.redirect_uri;
+            if (self.getParam('code')) {
+              if (self.getParam('code').length === 64) {
+                self.getToken();
+              }
+            }
+          })
+          .catch(function (error) {
+            console.log(error);
+          });
+        },
+        getAuthCode: function () {
+          let initial_data = {
+            'id': this.auth.client_id,
+            'secret': this.auth.client_secret,
+            'redirect': this.auth.redirect_uri,
+          };
+          sessionStorage.setItem('freee_initial', JSON.stringify(initial_data));
+          
+          let URL = 'https://accounts.secure.freee.co.jp/public_api/authorize?client_id=' + this.auth.client_id + '&redirect_uri=' + this.auth.redirect_uri + '&response_type=code';
+          location.href = URL;
+        },
+        getToken: function () {
+          let self = this
+          this.auth.code = this.getParam('code');
+          axios.post('/auth', {
+            client_id: self.auth.client_id,
+            client_secret: self.auth.client_secret,
+            redirect_uri: self.auth.redirect_uri,
+            grant_type: 'authorization_code',
+            code: self.auth.code
+          })
+          .then(function (response) {
+            console.log(response);
+            self.auth.access_token = response.data.access_token;
+            self.auth.refresh_token = response.data.refresh_token;
+            sessionStorage.setItem('freee_token', JSON.stringify(response.data));
+            location.href = self.auth.redirect_uri
+          })
+          .catch(function (error) {
+            console.log(error);
+          })
+        },
+        checkLogin: function () {
+          if (sessionStorage.getItem('freee_token')) {
+            this.auth.access_token = JSON.parse(sessionStorage.getItem('freee_token')).access_token
+            this.auth.refresh_token = JSON.parse(sessionStorage.getItem('freee_token')).refresh_token
+          }
+        },
+        revokeToken: function () {
+          axios.post('/revoke', {
+            access_token: this.auth.refresh_token
+          })
+          .then(function (response) {
+            console.log(response);
+            sessionStorage.removeItem('freee_token');
+            location.reload();
+          })
+          .catch(function (error) {
+            console.log(error);
+          });
+        },
+        getLoginUser: function () {
+          let self = this
+          axios.get('/user/me', {
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            console.log(response);
+            self.user.id = response.data.user.id;
+            self.user.email = response.data.user.email;
+            self.user.display_name = response.data.user.display_name;
+          })
+          .catch(function () {
+            console.log(error);
+          })
+        },
+        getCompanies: function () {
+          let self = this
+          axios.get('/companies', {
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            console.log(response);
+            self.companies = response.data.companies;
+          })
+          .catch(function () {
+            console.log(error);
+          })
+        },
+        getCompany: function () {
+          let self = this
+          axios.get('/company', {
+            params: { id: this.company_selected },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.myCompany = response.data.company;
+            console.log(response);
+            self.companies = [];
+          })
+          .catch(function () {
+            console.log(error);
+          })
+        },
+        getParam: function (name, url) {
+          if (!url) url = window.location.href;
+          name = name.replace(/[\[\]]/g, '\\$&');
+          let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+            results = regex.exec(url);
+          if (!results) return null;
+          if (!results[2]) return '';
+          return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
-      }).then((data) => {
-        console.log(data);
-        sessionStorage.removeItem('freee_token');
-        location.reload();
-      });
-    }
-
-    function getParam(name, url) {
-      if (!url) url = window.location.href;
-      name = name.replace(/[\[\]]/g, '\\$&');
-      let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
-        results = regex.exec(url);
-      if (!results) return null;
-      if (!results[2]) return '';
-      return decodeURIComponent(results[2].replace(/\+/g, ' '));
-    }
-  });
-
+      }
+    })
 </script>
 </body>
 </html>
