@@ -220,7 +220,7 @@ app.get('/journals/download', (req, res) => {
     console.log(body);
     const retStr = iconv.decode(body, 'Shift-JIS');
     csv({
-      noheader:true
+      // noheader:true
     })
    .fromString(retStr.toString('UTF-8'))
     .then((json)=>{ 
