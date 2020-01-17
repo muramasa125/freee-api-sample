@@ -3,8 +3,9 @@ const app = express()
 const bodyParser = require('body-parser')
 const request = require('request')
 const port = 3000
+const csv=require('csvtojson')
+const iconv = require('iconv-lite');
 require('dotenv').config()
-
 
 app.use('/', express.static('public'));
 app.get('/auth/', (req, res) => {
@@ -95,6 +96,9 @@ app.get('/company/', (req, res) => {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + req.header('token'),
     },
+    qs: {
+      details: true
+    },
     json: true
   };
   request(options, function(error, response, body) {
@@ -158,4 +162,71 @@ app.get('/reports/trial_pl/', (req, res) => {
     res.send(body);
   });
 });
-app.listen(port, () => console.log(`Example app listening on port ${port}!`))
+app.get('/journals/', (req, res) => {
+  const options = {
+    method: 'GET',
+    url: "https://api.freee.co.jp/api/1/journals",
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + req.header('token'),
+    },
+    qs: {
+      company_id: req.query.company_id,
+      download_type: 'generic',
+      visible_tags: Array['all']
+    },
+    json: true
+  };
+  request(options, function(error, response, body) {
+    console.log(body);
+    res.send(body);
+  });
+});
+app.get('/journals/status', (req, res) => {
+  const options = {
+    method: 'GET',
+    url: "https://api.freee.co.jp/api/1/journals/reports/" + req.query.download_id + "/status",
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + req.header('token'),
+    },
+    qs: {
+      company_id: req.query.company_id,
+      visible_tags: Array['all']
+    },
+    json: true
+  };
+  request(options, function(error, response, body) {
+    console.log(body);
+    res.send(body);
+  });
+});
+app.get('/journals/download', (req, res) => {
+  const options = {
+    method: 'GET',
+    url: "https://api.freee.co.jp/api/1/journals/reports/" + req.query.download_id + "/download",
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + req.header('token'),
+    },
+    qs: {
+      company_id: req.query.company_id
+    },
+    json: true,
+    encoding: null
+  };
+  request(options, function(error, response, body) {
+    console.log(response.headers["content-type"])
+    console.log(body);
+    const retStr = iconv.decode(body, 'Shift-JIS');
+    csv({
+      noheader:true
+    })
+   .fromString(retStr.toString('UTF-8'))
+    .then((json)=>{ 
+      console.log(json);
+      res.send(json);        
+    });
+  });
+});
+app.listen(port, () => console.log(`freee API sample app listening on port ${port}!`))

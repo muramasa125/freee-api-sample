@@ -47,11 +47,18 @@
             <b-table striped hover :items="my_company.fiscal_years" :fields="fields_fiscal_years" caption-top>
               <template v-slot:table-caption>会計期間</template>
             </b-table>
-            <b-button variant="primary" v-on:click="getAccountItems()">勘定科目一覧取得</b-button>
-            <b-button variant="primary" v-on:click="getReportBS()">BS取得</b-button>
-            <b-button variant="primary" v-on:click="getReportPL()">PL取得</b-button>
+            <b-row>
+              <b-button variant="primary" v-on:click="getAccountItems()">勘定科目一覧取得</b-button>
+              <b-button variant="primary" v-on:click="getReportBS()">BS取得</b-button>
+              <b-button variant="primary" v-on:click="getReportPL()">PL取得</b-button>
+            </b-row>
+            <b-row>
+              <b-button variant="primary" v-if="report.journalStatus === null" v-on:click="requestJournals()" :disabled="report.journalsButtonDisabled">仕訳取得依頼</b-button>
+              <b-button variant="warning" v-if="report.journalStatus != null && report.journalStatus != 'uploaded'" v-on:click="getJournalsStatus()" :disabled="report.journalsButtonDisabled">仕訳取得状況</b-button>
+              <b-button variant="success" v-if="report.journalStatus === 'uploaded'" v-on:click="downloadJournals()" :disabled="report.journalsButtonDisabled">仕訳ダウンロード</b-button>
+            </b-row>
           </b-card>
-        <b-tabs content-class="mt-3" v-if="account_items != null || report.BS != null || report.PL != null">
+        <b-tabs content-class="mt-3" v-if="account_items != null || report.BS != null || report.PL != null || report.Journals.length > 0">
           <b-tab title="勘定科目" v-if="account_items != null" active>
             <b-table small striped hover :items="account_items"></b-table>
           </b-tab>
@@ -63,6 +70,10 @@
           <b-tab title="PL" v-if="report.PL != null">
             <b-table small striped hover :items="report.PL.balances" caption-top>
               <template v-slot:table-caption>{{ report.PL.fiscal_year }}年度</template>
+            </b-table>
+          </b-tab>
+          <b-tab title="仕訳帳" v-if="report.Journals != null">
+            <b-table small striped hover :items="report.Journals" caption-top>
             </b-table>
           </b-tab>
         </b-tabs>
@@ -99,7 +110,11 @@
         account_items: null,
         report: {
           BS: null,
-          PL: null
+          PL: null,
+          journalsButtonDisabled: false,
+          journalsDownloadId: null,
+          journalStatus: null,
+          Journals: []
         }
       },
       mounted: function () {
@@ -271,6 +286,71 @@
           })
           .catch(function (error) {
             console.log(error);
+          })
+        },
+        requestJournals: function () {
+          let self = this
+          this.report.Journals = []
+          this.report.journalsButtonDisabled = true
+          axios.get('/journals', {
+            params: { company_id: this.my_company.id },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.report.journalsDownloadId = response.data.journals.id;
+            console.log(response);
+            self.report.journalsButtonDisabled = false
+            self.getJournalsStatus()
+          })
+          .catch(function (error) {
+            console.log(error);
+            self.report.journalsButtonDisabled = false
+          })
+        },
+        getJournalsStatus: function () {
+          let self = this
+          this.report.Journals = []
+          this.report.journalsButtonDisabled = true
+          axios.get('/journals/status', {
+            params: {
+              company_id: this.my_company.id,
+              download_id: this.report.journalsDownloadId
+            },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.report.journalStatus = response.data.journals.status;
+            console.log(response);
+            self.report.journalsButtonDisabled = false
+          })
+          .catch(function (error) {
+            console.log(error);
+            self.report.journalsButtonDisabled = false
+          })
+        },
+        downloadJournals: function () {
+          let self = this
+          this.report.Journals = []
+          this.report.journalsButtonDisabled = true
+          axios.get('/journals/download', {
+            params: {
+              company_id: this.my_company.id,
+              download_id: this.report.journalsDownloadId
+            },
+            headers: { token: this.auth.access_token },
+            data: {}
+          })
+          .then(function (response) {
+            self.report.Journals = response.data;
+            console.log(response);
+            self.report.journalStatus = null;
+            self.report.journalsButtonDisabled = false
+          })
+          .catch(function (error) {
+            console.log(error);
+            self.report.journalsButtonDisabled = false
           })
         },
         getParam: function (name, url) {
