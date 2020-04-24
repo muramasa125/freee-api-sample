@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta content="IE=edge" http-equiv="X-UA-Compatible">
   <meta content="width=device-width, initial-scale=1" name="viewport">
-  <title>freee APIの認証サンプル</title>
+  <title>freee連携</title>
   <!-- Load required Bootstrap and BootstrapVue CSS -->
   <link type="text/css" rel="stylesheet" href="https://unpkg.com/bootstrap/dist/css/bootstrap.min.css" />
   <link type="text/css" rel="stylesheet" href="https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.css" />
@@ -27,7 +27,7 @@
         </b-nav-item-dropdown>
       </b-navbar-nav>-->
     </b-navbar>
-    <b-container>
+    <b-container class="p-3">
       <b-row>
         <h5 v-if="user.id != null">{{ user.email }}:{{ user.display_name }}</h5>
         <b-button variant="warning" v-if="auth.access_token != null" v-on:click="revokeToken()">token破棄</b-button>
@@ -72,13 +72,13 @@
               <template v-slot:table-caption>{{ report.PL.fiscal_year }}年度</template>
             </b-table>
           </b-tab>
-          <b-tab title="仕訳帳" v-if="report.Journals != null">
+          <b-tab title="仕訳帳" v-if="report.Journals.length > 0">
             <b-table small striped hover :items="report.Journals" caption-top>
             </b-table>
           </b-tab>
         </b-tabs>
         </b-container>
-      <b-button variant="primary" v-if="auth.access_token === null" v-on:click="getAuthCode()">freee認証</b-button>
+      <b-button variant="primary" v-if="auth.access_token === null" v-on:click="getAuthCode()">freee認証を開始する</b-button>
     </b-container>
   </div>
   <script>
@@ -117,9 +117,21 @@
           Journals: []
         }
       },
+      created: function (){
+        this.getAuthInfo();
+      },
       mounted: function () {
         console.log('mounted');
-        this.getAuthInfo();
+        if (document.cookie.split(';').filter((item) => item.trim().startsWith('data1=')).length) {
+          console.log("cookie existed!")
+        } else {
+          document.cookie = 'data1=' + Date.now().toString() + ';path=/';
+        }
+        /*
+        if (!sessionStorage.getItem('test')) {
+          sessionStorage.setItem('test', Date.now().toString());
+        }
+        */
         this.checkLogin();
         this.getLoginUser();
         this.getCompanies();
